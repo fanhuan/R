@@ -1,0 +1,80 @@
+---
+title: "NMDS Tutorial in R"
+author: "Jon Lefcheck"
+date: "12/13/2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(MASS)
+library(ggplot2)
+library(ggrepel)
+source("~/GitHub/R/Huan/R/Huan.R")
+```
+
+
+The original post is found [at](https://jonlefcheck.net/)
+
+```{r NMDS example}
+# One species
+plot(0:10,0:10,type="n",axes=F,xlab="Abundance of Species 1",ylab="") 
+axis(1)
+points(5,0); text(5.5,0.5,labels="community A")
+points(3,0); text(3.2,0.5,labels="community B")
+points(0,0); text(0.8,0.5,labels="community C")
+# Two species
+plot(0:10,0:10,type="n",xlab="Abundance of Species 1",
+     ylab="Abundance of Species 2")
+points(5,5); text(5,4.5,labels="community A")
+points(3,3); text(3,3.5,labels="community B")
+points(0,5); text(0.8,5.5,labels="community C")
+# Three species
+#install.packages("scatterplot3d")
+library(scatterplot3d)
+d=scatterplot3d(0:10,0:10,0:10,type="n",xlab="Abundance of Species 1",
+  ylab="Abundance of Species 2",zlab="Abundance of Species 3"); d
+d$points3d(5,5,0); text(d$xyz.convert(5,5,0.5),labels="community A")
+d$points3d(3,3,3); text(d$xyz.convert(3,3,3.5),labels="community B")
+d$points3d(0,5,5); text(d$xyz.convert(0,5,5.5),labels="community C")
+#Example
+library(vegan)
+set.seed(2)
+community_matrix=matrix(
+   sample(1:100,300,replace=T),nrow=10,
+   dimnames=list(paste("community",1:10,sep=""),paste("sp",1:30,sep="")))
+
+example_NMDS=metaMDS(community_matrix, # Our community-by-species matrix
+                     k=2) # The number of reduced dimensions
+stressplot(example_NMDS)
+example_NMDS_1=metaMDS(community_matrix,k=2,trymax=100)
+plot(example_NMDS)
+ordiplot(example_NMDS,type="n")
+orditorp(example_NMDS,display="species",col="red",air=0.01)
+orditorp(example_NMDS,display="sites",cex=1.25,air=0.01)
+#Hongjie's data
+# 10 contigs, k=11
+k <- 17
+Hongjie <- read.table(file = paste0('~/Dropbox/Research/Hongjie/Hongjie_k',k,'.dist'),skip = 1, row.names = 1)
+colnames(Hongjie) <- rownames(Hongjie)
+Hongjie_1 <- as.matrix(Hongjie)
+hongjie.nmds <- nmds(Hongjie_1)
+points <- as.data.frame(hongjie.nmds$points)
+colnames(points) <- c('NMDS1','NMDS2')
+ggplot(points) +
+  geom_point(aes(NMDS1,NMDS2),color = 'red') + 
+  geom_text_repel(aes(NMDS1,NMDS2,label = rownames(points))) +
+  ggtitle(paste('k =',k))
+#plot(hongjie.nmds$points,type = "n"); #text(hongjie.nmds$points[,1],hongjie.nmds$points[,2],row.names(hongjie.nmds$points))
+
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
