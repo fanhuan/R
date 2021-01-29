@@ -14,7 +14,7 @@ source("~/GitHub/R/Huan/R/Huan.R")
 ```
 
 
-The original post is found [at](https://jonlefcheck.net/)
+The original post is found [at](https://jonlefcheck.net/2012/10/24/nmds-tutorial-in-r/)
 
 ```{r NMDS example}
 # One species
