@@ -4,9 +4,9 @@ library(phyloseq)
 library(phangorn)
 library(DECIPHER)
 
-path <- '~/Data/YBD/16S_illumina/fastq/'
+path <- '~/Data/YBD/16S_tithe/fastq/'
 files = list.files(path, pattern = '.fastq', full.names = TRUE)
-plotQualityProfile(files[1:4])
+plotQualityProfile(files)
 # we also need the sample names
 files_list = list.files(path, pattern = '.fastq')
 sample_names <- sapply(strsplit(files_list,"\\."),
@@ -129,8 +129,9 @@ plot_ordination(physeq, ord, type='samples', color='Species', shape = 'Habitat',
     theme_minimal()
 
 top20 <- names(sort(taxa_sums(physeq), decreasing=TRUE))[1:20]
-physeq_top20 <- transform_sample_counts(physeq1, function(OTU) OTU/sum(OTU))
-physeq_top20 <- prune_taxa(top20, physeq_top20)
+physeq_relative <- transform_sample_counts(physeq1, function(OTU) OTU/sum(OTU))
+physeq_top20 <- prune_taxa(top20, physeq_relative)
+
 plot_bar(physeq_top20, x="ID", fill='Family') +
     facet_wrap(~Habitat, scales='free_x') +
     theme_minimal()
@@ -139,3 +140,26 @@ plot_bar(physeq_top20, x="ID", fill='Family') +
     facet_wrap(~Animal, scales='free_x') +
     theme_minimal()
 
+physeq1 <- phyloseq(otu_table(seq_table_nochim, taxa_are_rows=FALSE),
+                    sample_data(sample_data1),
+                    tax_table(taxa))
+physeq_top20_count <- prune_taxa(top20, physeq1)
+OTU1 <- as(otu_table(physeq_top20_count), "matrix")
+OTU2 <- t(OTU1)
+taxa_names(physeq_top20) <- paste0("SV", seq(ntaxa(physeq_top20)))
+OTU3 <- as(otu_table(physeq_top20), "matrix")
+OTU4 <- as.data.frame(t(OTU3))
+OTU4$OTU <- rownames(OTU4)
+OTU4 <- OTU4 %>% select(OTU, A:R)
+write.table(OTU4,'OTU4.csv',row.names = FALSE, sep = ',', quote = FALSE)
+taxa_names(physeq_top20) <- paste0(">SV", seq(ntaxa(physeq_top20)))
+OTU5 <- as(otu_table(physeq_top20), "matrix")
+OTU6 <- as.data.frame(t(OTU5))
+OTU6$Seq <- colnames(OTU1)
+OTU6 <- OTU6 %>% select(Seq)
+write.table(OTU6, file = 'OTU6.fa', quote = FALSE, sep = '\n', col.names = FALSE)
+
+colnames(OTU1)
+for (i in 1:nrow(OTU1)){
+    
+}
