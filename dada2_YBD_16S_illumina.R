@@ -3,18 +3,23 @@ library(ggplot2)
 library(phyloseq)
 library(phangorn)
 library(DECIPHER)
+library(dplyr)
 
-path <- '~/Data/YBD/16S_tithe/fastq/'
+path <- '~/Data/YBD/16S_illumina/fastq/'
 files = list.files(path, pattern = '.fastq', full.names = TRUE)
-plotQualityProfile(files)
+# plotQualityProfile(files)
 # we also need the sample names
 files_list = list.files(path, pattern = '.fastq')
-sample_names <- sapply(strsplit(files_list,"\\."),
+file_names <- sapply(strsplit(files_list,"\\."),
                        `[`,  # backtick (or back quote, `), [ for exact match while [[ can extend
                        1) # indexing by character, extracts the first element of a subset
-filtered_path <- '~/Data/YBD/16S_tithe/trimmed/'
+sample_data <- read.csv('~/Data/YBD/YBD_metadata.csv',
+                        header=TRUE)
+sample_names <- sample_data[match(file_names,sample_data$ID),]$Sample
+rownames(sample_data) <- sample_data$Sample
+filtered_path <- '~/Data/YBD/16S_illumina/trimmed'
 trim_files <- file.path(filtered_path,
-                              paste0(sample_names, "_trimmed.fastq.gz"))
+                              paste0('trim_', sample_names, ".fastq.gz"))
 
 
 
@@ -25,7 +30,7 @@ out <- filterAndTrim(files, trim_files, maxLen = 300, maxN=0,
                      multithread=TRUE, trimLeft = 23, trimRight = 20)
 # 
 errors <- learnErrors(trim_files, multithread=TRUE)
-#saveRDS(errors,'erros_half.rds')
+saveRDS(errors,'~/Data/YBD/16S_illumina/dada2_errors.rds')
 # time demanding. But why only 12 samples
 
 derep <- derepFastq(trim_files, verbose=TRUE)
@@ -39,8 +44,8 @@ dim(seq_table)
 
 # inspect distribution of sequence lengths
 table(nchar(getSequences(seq_table)))
-seqtab2 <- seq_table[,nchar(colnames(seq_table)) %in% 250:256]
-seq_table_nochim <- removeBimeraDenovo(seqtab2, method='consensus',
+#seqtab2 <- seq_table[,nchar(colnames(seq_table)) %in% 250:256]
+seq_table_nochim <- removeBimeraDenovo(seq_table, method='consensus',
                                        multithread=TRUE, verbose=TRUE)
 dim(seq_table_nochim)
 
@@ -58,14 +63,14 @@ rownames(track) <- sample_names
 head(track)
 
 taxa <- assignTaxonomy(seq_table_nochim,
-                       '~/Data/MiSeq_SOP/silva_nr_v128_train_set.fa.gz',
+                       '~/Data/silva_nr_v128_train_set.fa.gz',
                        multithread=TRUE)
 
 # time consuming
 
 #seq_table <- readRDS('seq_table.rds')
-taxa <- addSpecies(taxa, '~/Data/MiSeq_SOP/silva_species_assignment_v128.fa.gz')
-#saveRDS(taxa, 'taxa_half.rds')
+taxa <- addSpecies(taxa, '~/Data/silva_species_assignment_v128.fa.gz')
+saveRDS(taxa, '~/Data/YBD/16S_illumina/dada2_taxa.rds')
 #saveRDS(seq_table, 'seq_table.rds')
 #saveRDS(seq_table_nochim, 'seq_table_nochim.rds')
 #taxa <- readRDS('taxa.rds')
@@ -75,10 +80,9 @@ head(taxa_print)
 
 sequences <- getSequences(seq_table)
 names(sequences) <- sequences  # this propagates to the tip labels of the tree
-alignment <- AlignSeqs(DNAStringSet(sequences), anchor=NA)
-
+alignment <- AlignSeqs(DNAStringSet(sequences), anchor=NA) # time consuming
 phang_align <- phyDat(as(alignment, 'matrix'), type='DNA')
-#saveRDS(phang_align,'phang_align_half.rds')
+saveRDS(phang_align,'~/Data/YBD/16S_illumina/dada2_phang_align.rds')
 #dm <- dist.ml(phang_align)
 #treeNJ <- NJ(dm)  # note, tip order != sequence order
 # takes a long time! Also I don't need this thing.
@@ -94,33 +98,48 @@ phang_align <- phyDat(as(alignment, 'matrix'), type='DNA')
 #saveRDS(fitGTR, 'fitGTR_half.rds')
 #fitGTR <- readRDS('fitGTR.rds')
 # construct ML tree
-fitGTR <- optim.pml(fitGTR, model='GTR', optInv=TRUE, optGamma=TRUE,
-                    rearrangement = 'stochastic',
-                    control = pml.control(trace = 0))
+# fitGTR <- optim.pml(fitGTR, model='GTR', optInv=TRUE, optGamma=TRUE,
+#                    rearrangement = 'stochastic',
+#                    control = pml.control(trace = 0))
 #Error: vector memory exhausted (limit reached?)
 # First, check whether you are using 64-bit R. 
 # I gave up! Too many tips.
 detach('package:phangorn', unload=TRUE)
 
-sample_data <- read.table('~/Data/YBD/YBD_metadata.txt',
-    header=TRUE, row.names=as.character("ID"))
-sample_data1 <- sample_data
-sample_data1$ID <- rownames(sample_data)
 #seq_table_nochim <- readRDS('seq_table_nochim.rds')
+# The blow error message was caused by IDing with integers
+### Error in validObject(.Object) : invalid class “phyloseq” object: 
+### Component sample names do not match.
+### Try sample_names()
+
 physeq <- phyloseq(otu_table(seq_table_nochim, taxa_are_rows=FALSE),
                    sample_data(sample_data),
                    tax_table(taxa))
-physeq1 <- phyloseq(otu_table(seq_table_nochim, taxa_are_rows=FALSE),
-                   sample_data(sample_data1),
-                   tax_table(taxa))
 
-# remove mock sample
-plot_richness(physeq, x='Species', measures=c('Shannon', 'Fisher'), color='Habitat') +
+physeq1 <- physeq
+OTU1 <- as(otu_table(physeq1), "matrix")
+OTU2 <- t(OTU1)
+taxa_names(physeq1) <- paste0("SV", seq(ntaxa(physeq1)))
+OTU3 <- as(otu_table(physeq1), "matrix")
+OTU4 <- as.data.frame(t(OTU3))
+OTU4$OTU <- rownames(OTU4)
+OTU4 <- OTU4 %>% select(OTU, Cow_Thi_2:Cow_Sav_5)
+write.table(OTU4,'OTU4.csv',row.names = FALSE, sep = ',', quote = FALSE)
+
+taxa_names(physeq1) <- paste0(">SV", seq(ntaxa(physeq1)))
+OTU5 <- as(otu_table(physeq1), "matrix")
+OTU6 <- as.data.frame(t(OTU5))
+OTU6$Seq <- colnames(OTU1)
+OTU6 <- OTU6 %>% select(Seq)
+write.table(OTU6, file = 'OTU6.fa', quote = FALSE, sep = '\n', col.names = FALSE)
+
+
+plot_richness(physeq, x='Animal', measures=c('Shannon', 'Fisher'), color='Habitat') +
     theme_minimal()
 
 ord <- ordinate(physeq, 'MDS', 'euclidean')
-plot_ordination(physeq, ord, type='samples', color='Species', shape = 'Habitat',
-                title='PCA of the samples from the MiSeq SOP') +
+plot_ordination(physeq, ord, lable='Sample', color='Animal', shape = 'Habitat', 
+                title='PCA of 16S data') +
     theme_minimal()
 
 ord <- ordinate(physeq, 'NMDS', 'bray')
